@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -70,7 +69,7 @@ func (d *Downloader) singleDownload(ctx context.Context, rawurl, outPath string,
 	filename := filepath.Base(outPath)
 
 	// Try to extract filename from Content-Disposition header
-	if dtype, name, err := httpheader.ContentDisposition(resp.Header); err == nil && name != "" {
+	if _, name, err := httpheader.ContentDisposition(resp.Header); err == nil && name != "" {
     	filename = filepath.Base(name)
 	} else {
 		// Fallback: Use download.bin for now
@@ -92,61 +91,46 @@ func (d *Downloader) singleDownload(ctx context.Context, rawurl, outPath string,
 		}
 	}() //Waits until the function returns and closes the temp file and removes it if there was an error
 
-	var total int64 = -1
-	if cl := resp.Header.Get("Content-Length"); cl != "" {
-		if v, e := strconv.ParseInt(cl, 10, 64); e == nil {
-			total = v
-		}
-	}
+	// var total int64 = -1
+	// if cl := resp.Header.Get("Content-Length"); cl != "" {
+	// 	if v, e := strconv.ParseInt(cl, 10, 64); e == nil {
+	// 		total = v
+	// 	}
+	// }
 
-	// copy loop with manual buffering so we can measure progress
-	buf := make([]byte, 32*1024) // 32KB buffer
-	var written int64 = 0
-	lastReport := time.Now()
+	// 
+	
 	start := time.Now()
 
-	for {
-		// respect context cancellation: check before read
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		n, readErr := resp.Body.Read(buf)
-		if n > 0 {
-			wn, werr := tmpFile.Write(buf[:n])
-			if werr != nil {
-				return werr
-			}
-			if wn != n {
-				return io.ErrShortWrite
-			}
-			written += int64(n)
-		}
-
-		// progress reporting periodically (every 200ms or on finish)
-		now := time.Now()
-		if now.Sub(lastReport) > 200*time.Millisecond || readErr == io.EOF {
-			d.printProgress(written, total, start, verbose)
-			lastReport = now
-		}
-
-		if readErr != nil {
-			if readErr == io.EOF {
-				break
-			}
-			return readErr
-		}
+	// Copy response body to file efficiently
+	written, err := io.Copy(tmpFile, resp.Body)
+	if err != nil {
+	    return fmt.Errorf("copy failed: %w", err)
 	}
-
-	// sync file to disk
+	// Sync file to disk
 	if err := tmpFile.Sync(); err != nil {
-		return err
+    	return err
 	}
 	if err := tmpFile.Close(); err != nil {
-		return err
+    	return err
 	}
+
+	elapsed := time.Since(start)
+	speed := float64(written) / 1024.0 / elapsed.Seconds() // KiB/s
+	fmt.Fprintf(os.Stderr, "\nDownloaded %s in %s (%s/s)\n",
+    	outPath,
+    	elapsed.Round(time.Second),
+    	util.ConvertBytesToHumanReadable(int64(speed*1024)),
+	)
+
+
+	// // sync file to disk
+	// if err := tmpFile.Sync(); err != nil {
+	// 	return err
+	// }
+	// if err := tmpFile.Close(); err != nil {
+	// 	return err
+	// }
 
 	// atomically move temp to dest
 	destPath := outPath
@@ -181,10 +165,6 @@ func (d *Downloader) singleDownload(ctx context.Context, rawurl, outPath string,
     return fmt.Errorf("rename failed: %v", renameErr) //If everything fails we say renaming the file failed
 }
 
-
-	elapsed := time.Since(start)
-	speed := float64(written) / 1024.0 / elapsed.Seconds() // KiB/s
-	fmt.Fprintf(os.Stderr, "\nDownloaded %s in %s (%s/s)\n", destPath, elapsed.Round(time.Second), util.ConvertBytesToHumanReadable(int64(speed*1024)))
 	return nil
 }
 
