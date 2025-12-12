@@ -15,20 +15,20 @@ var (
 
 	// Styles
 	AppStyle = lipgloss.NewStyle().
-			Padding(1, 2).
+			Padding(DefaultPaddingX, 2).
 			Foreground(ColorText)
 
 	TitleStyle = lipgloss.NewStyle().
 			Foreground(ColorPrimary).
 			Bold(true).
-			Padding(0, 1).
+			Padding(DefaultPaddingY, DefaultPaddingX).
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(ColorPrimary)
 
 	PanelStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(ColorBorder).
-			Padding(0, 1)
+			Padding(DefaultPaddingY, DefaultPaddingX)
 
 	FocusedPanelStyle = PanelStyle.
 				BorderForeground(ColorSecondary)
@@ -45,7 +45,7 @@ var (
 	StatusBarStyle = lipgloss.NewStyle().
 			Foreground(ColorText).
 			Background(lipgloss.Color("#282a36")). // Dracula Background
-			Padding(0, 1)
+			Padding(DefaultPaddingY, DefaultPaddingX)
 
 	// Progress Styles
 	ProgressBarStyle = lipgloss.NewStyle().
@@ -55,7 +55,7 @@ var (
 	HeaderStyle = lipgloss.NewStyle().
 			Foreground(ColorText).
 			Bold(true).
-			Padding(0, 1).
+			Padding(DefaultPaddingY, DefaultPaddingX).
 			BorderStyle(lipgloss.NormalBorder()).
 			BorderForeground(ColorPrimary).
 			BorderBottom(true)
@@ -63,14 +63,14 @@ var (
 	// Stats Style in Header
 	StatsStyle = lipgloss.NewStyle().
 			Foreground(ColorSubtext).
-			Padding(0, 1)
+			Padding(DefaultPaddingY, DefaultPaddingX)
 
 	// Base Card Style
 	CardStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(ColorBorder).
-			Padding(0, 1).
-			Margin(0, 1)
+			Padding(DefaultPaddingY, DefaultPaddingX).
+			Margin(DefaultPaddingY, DefaultPaddingX)
 
 	// Selected Card Style (highlighted border)
 	SelectedCardStyle = CardStyle.

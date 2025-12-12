@@ -39,7 +39,7 @@ var getCmd = &cobra.Command{
 		p := tea.NewProgram(tui.InitialRootModel(), tea.WithAltScreen())
 
 		// Create a channel for progress updates
-		progressCh := make(chan tea.Msg, 100)
+		progressCh := make(chan tea.Msg, DefaultProgressChannelBuffer)
 		d.SetProgressChan(progressCh)
 		d.SetID(1) // Single download for now
 
@@ -70,7 +70,7 @@ var getCmd = &cobra.Command{
 
 func init() {
 	getCmd.Flags().StringP("path", "p", "", "the path to the download folder")
-	getCmd.Flags().IntP("concurrent", "c", 1, "number of concurrent connections (1 = single thread)")
+	getCmd.Flags().IntP("concurrent", "c", DefaultConcurrentConnections, "number of concurrent connections (1 = single thread)")
 	getCmd.Flags().BoolP("verbose", "v", false, "enable verbose output")
 	getCmd.Flags().String("md5", "", "MD5 checksum for verification")
 	getCmd.Flags().String("sha256", "", "SHA256 checksum for verification")

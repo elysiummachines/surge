@@ -66,19 +66,19 @@ func InitialRootModel() RootModel {
 	urlInput := textinput.New()
 	urlInput.Placeholder = "https://example.com/file.zip"
 	urlInput.Focus()
-	urlInput.Width = 50
+	urlInput.Width = InputWidth
 	urlInput.Prompt = "URL: "
 
 	pathInput := textinput.New()
 	pathInput.Placeholder = "."
-	pathInput.Width = 50
+	pathInput.Width = InputWidth
 	pathInput.Prompt = "Out: "
 
 	return RootModel{
 		downloads:    make([]*DownloadModel, 0),
 		inputs:       []textinput.Model{urlInput, pathInput},
 		state:        DashboardState,
-		progressChan: make(chan tea.Msg, 100),
+		progressChan: make(chan tea.Msg, ProgressChannelBuffer),
 	}
 }
 
@@ -96,7 +96,7 @@ func listenForActivity(sub chan tea.Msg) tea.Cmd {
 }
 
 func tickCmd() tea.Cmd {
-	return tea.Tick(200*time.Millisecond, func(_ time.Time) tea.Msg {
+	return tea.Tick(TickInterval, func(_ time.Time) tea.Msg {
 		return messages.TickMsg{}
 	})
 }

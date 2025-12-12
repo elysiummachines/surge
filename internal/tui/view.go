@@ -30,7 +30,7 @@ func (m RootModel) View() string {
 		)
 
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center,
-			PanelStyle.Padding(2, 4).Render(popup),
+			PanelStyle.Padding(PopupPaddingY, PopupPaddingX).Render(popup),
 		)
 	}
 
@@ -52,7 +52,7 @@ func (m RootModel) View() string {
 	active, queued, downloaded := m.CalculateStats()
 	headerStats := fmt.Sprintf("Active: %d | Queued: %d | Downloaded: %d", active, queued, downloaded)
 	header := lipgloss.JoinVertical(lipgloss.Left,
-		HeaderStyle.Width(m.width-2).Render("Surge"),
+		HeaderStyle.Width(m.width-HeaderWidthOffset).Render("Surge"),
 		StatsStyle.Render(headerStats),
 	)
 
@@ -73,7 +73,7 @@ func (m RootModel) View() string {
 	// === List of Cards ===
 	var cards []string
 	for i, d := range m.downloads {
-		cards = append(cards, renderCard(d, i == m.cursor, m.width-4))
+		cards = append(cards, renderCard(d, i == m.cursor, m.width-ProgressBarWidthOffset))
 	}
 
 	listContent := lipgloss.JoinVertical(lipgloss.Left, cards...)
@@ -97,7 +97,7 @@ func renderCard(d *DownloadModel, selected bool, width int) string {
 	if d.Total > 0 {
 		pct = float64(d.Downloaded) / float64(d.Total)
 	}
-	d.progress.Width = width - 4
+	d.progress.Width = width - ProgressBarWidthOffset
 	progressBar := d.progress.View()
 
 	// Stats line
@@ -108,7 +108,7 @@ func renderCard(d *DownloadModel, selected bool, width int) string {
 		eta = time.Duration(remainingSeconds * float64(time.Second)).Round(time.Second).String()
 	}
 
-	stats := fmt.Sprintf("Speed: %.1f MB/s | ETA: %s | %.0f%%", d.Speed/1024.0/1024.0, eta, pct*100)
+	stats := fmt.Sprintf("Speed: %.1f MB/s | ETA: %s | %.0f%%", d.Speed/Megabyte, eta, pct*100)
 	if d.done {
 		stats = fmt.Sprintf("Completed | Size: %s", utils.ConvertBytesToHumanReadable(d.Total))
 	}
@@ -153,7 +153,7 @@ func renderDetails(m *DownloadModel) string {
 	stats := lipgloss.JoinVertical(lipgloss.Left,
 		fmt.Sprintf("Progress:    %.1f%%", percentage*100),
 		fmt.Sprintf("Size:        %s / %s", utils.ConvertBytesToHumanReadable(m.Downloaded), utils.ConvertBytesToHumanReadable(m.Total)),
-		fmt.Sprintf("Speed:       %.1f MB/s", m.Speed/1024.0/1024.0),
+		fmt.Sprintf("Speed:       %.1f MB/s", m.Speed/Megabyte),
 		fmt.Sprintf("ETA:         %s", eta),
 		fmt.Sprintf("Connections: %d", m.Connections),
 		fmt.Sprintf("Elapsed:     %s", m.Elapsed.Round(time.Second)),
@@ -174,7 +174,7 @@ func (m RootModel) calcTotalSpeed() float64 {
 	for _, d := range m.downloads {
 		total += d.Speed
 	}
-	return total / 1024.0 / 1024.0
+	return total / Megabyte
 }
 
 func (m RootModel) CalculateStats() (active, queued, downloaded int) {

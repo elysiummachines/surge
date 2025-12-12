@@ -33,6 +33,15 @@ const (
 
 	// Connection limits
 	PerHostMax = 8 // Max concurrent connections per host
+
+	// HTTP Client Tuning
+	DefaultMaxIdleConns          = 100
+	DefaultIdleConnTimeout       = 90 * time.Second
+	DefaultTLSHandshakeTimeout   = 10 * time.Second
+	DefaultResponseHeaderTimeout = 15 * time.Second
+	DefaultExpectContinueTimeout = 1 * time.Second
+	DialTimeout                  = 10 * time.Second
+	KeepAliveDuration            = 30 * time.Second
 )
 
 // Buffer pool to reduce GC pressure
@@ -218,15 +227,15 @@ func createTasks(fileSize, chunkSize int64) []Task {
 func newConcurrentClient() *http.Client {
 	transport := &http.Transport{
 		// Connection pooling
-		MaxIdleConns:        100,
+		MaxIdleConns:        DefaultMaxIdleConns,
 		MaxIdleConnsPerHost: PerHostMax + 2, // Slightly more than max to handle bursts
 		MaxConnsPerHost:     PerHostMax,
 
 		// Timeouts to prevent hung connections
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 15 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
+		IdleConnTimeout:       DefaultIdleConnTimeout,
+		TLSHandshakeTimeout:   DefaultTLSHandshakeTimeout,
+		ResponseHeaderTimeout: DefaultResponseHeaderTimeout,
+		ExpectContinueTimeout: DefaultExpectContinueTimeout,
 
 		// Performance tuning
 		DisableCompression: true, // Files are usually already compressed
@@ -234,8 +243,8 @@ func newConcurrentClient() *http.Client {
 
 		// Dial settings for TCP reliability
 		DialContext: (&net.Dialer{
-			Timeout:   10 * time.Second,
-			KeepAlive: 30 * time.Second,
+			Timeout:   DialTimeout,
+			KeepAlive: KeepAliveDuration,
 		}).DialContext,
 	}
 
