@@ -220,10 +220,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Cancel if active
 					m.Pool.Cancel(d.ID)
 
-					// Delete state files
+					// Delete state files (now uses global config directory)
 					if d.URL != "" {
-						surgeDir := m.PWD + "/.surge"
-						_ = downloader.DeleteStateByDir(surgeDir, d.URL)
+						_ = downloader.DeleteStateByURL(d.URL)
 					}
 
 					// Remove from list

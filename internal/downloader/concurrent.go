@@ -211,7 +211,7 @@ func getInitialConnections(fileSize int64) int {
 	case fileSize < 1*GB:
 		return 6
 	default:
-		return 40
+		return 16
 	}
 }
 
@@ -326,7 +326,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl, destPath st
 
 	// Check for saved state BEFORE truncating (resume case)
 	var tasks []Task
-	savedState, err := LoadState(destPath, rawurl)
+	savedState, err := LoadState(rawurl)
 	isResume := err == nil && savedState != nil && len(savedState.Tasks) > 0
 
 	if isResume {
@@ -474,7 +474,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl, destPath st
 			Tasks:      remainingTasks,
 			Filename:   filepath.Base(destPath),
 		}
-		if err := SaveState(destPath, d.URL, state); err != nil {
+		if err := SaveState(d.URL, state); err != nil {
 			utils.Debug("Failed to save pause state: %v", err)
 		}
 
@@ -492,7 +492,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl, destPath st
 	}
 
 	// Delete state file on successful completion
-	_ = DeleteState(destPath, d.URL)
+	_ = DeleteState(d.URL)
 
 	// Print final stats only if download wasn't cancelled
 	if ctx.Err() == nil {

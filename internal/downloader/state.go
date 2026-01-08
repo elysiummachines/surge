@@ -8,9 +8,12 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"surge/internal/config"
 )
 
 // URLHash returns a short hash of the URL for state file naming
+// This provides unique identification for each download based on its URL
 func URLHash(url string) string {
 	h := sha256.Sum256([]byte(url))
 	return hex.EncodeToString(h[:8]) // 16 chars
@@ -30,21 +33,21 @@ type DownloadState struct {
 }
 
 // getStatePath returns the path to the state file using URL hash
-func getStatePath(destPath string, url string) string {
-	dir := filepath.Dir(destPath)
-	return filepath.Join(dir, ".surge", URLHash(url)+".json")
+// Now uses global config directory instead of relative paths
+func getStatePath(url string) string {
+	return filepath.Join(config.GetStateDir(), URLHash(url)+".json")
 }
 
-// getSurgeDir returns the .surge directory for a destination path
-func getSurgeDir(destPath string) string {
-	return filepath.Join(filepath.Dir(destPath), ".surge")
+// getSurgeDir returns the global surge state directory
+func getSurgeDir() string {
+	return config.GetStateDir()
 }
 
-// SaveState saves download state to .surge/<urlhash>.json
-func SaveState(destPath string, url string, state *DownloadState) error {
-	statePath := getStatePath(destPath, url)
+// SaveState saves download state to global surge state directory
+func SaveState(url string, state *DownloadState) error {
+	statePath := getStatePath(url)
 
-	// Create .surge directory if it doesn't exist
+	// Create state directory if it doesn't exist
 	if err := os.MkdirAll(filepath.Dir(statePath), 0755); err != nil {
 		return fmt.Errorf("failed to create state directory: %w", err)
 	}
@@ -73,14 +76,14 @@ func SaveState(destPath string, url string, state *DownloadState) error {
 		Filename: state.Filename,
 		Status:   "paused",
 	}
-	_ = AddToMasterList(getSurgeDir(destPath), entry)
+	_ = AddToMasterList(entry)
 
 	return nil
 }
 
-// LoadState loads download state from .surge/<urlhash>.json
-func LoadState(destPath string, url string) (*DownloadState, error) {
-	statePath := getStatePath(destPath, url)
+// LoadState loads download state from global surge state directory
+func LoadState(url string) (*DownloadState, error) {
+	statePath := getStatePath(url)
 
 	data, err := os.ReadFile(statePath)
 	if err != nil {
@@ -96,8 +99,8 @@ func LoadState(destPath string, url string) (*DownloadState, error) {
 }
 
 // DeleteState removes the state file after successful completion
-func DeleteState(destPath string, url string) error {
-	statePath := getStatePath(destPath, url)
+func DeleteState(url string) error {
+	statePath := getStatePath(url)
 	urlHash := URLHash(url)
 
 	if err := os.Remove(statePath); err != nil && !os.IsNotExist(err) {
@@ -105,30 +108,15 @@ func DeleteState(destPath string, url string) error {
 	}
 
 	// Remove from master list
-	_ = RemoveFromMasterList(getSurgeDir(destPath), urlHash)
-
-	// Try to remove the .surge directory if it's empty
-	_ = os.Remove(filepath.Dir(statePath))
+	_ = RemoveFromMasterList(urlHash)
 
 	return nil
 }
 
-// DeleteStateByDir removes state file using surge directory directly (for TUI delete)
-func DeleteStateByDir(surgeDir string, url string) error {
-	urlHash := URLHash(url)
-	statePath := filepath.Join(surgeDir, urlHash+".json")
-
-	if err := os.Remove(statePath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to delete state file: %w", err)
-	}
-
-	// Remove from master list
-	_ = RemoveFromMasterList(surgeDir, urlHash)
-
-	// Try to remove the .surge directory if it's empty
-	_ = os.Remove(surgeDir)
-
-	return nil
+// DeleteStateByURL removes state file by URL (for TUI delete)
+// This replaces DeleteStateByDir since we now use a global directory
+func DeleteStateByURL(url string) error {
+	return DeleteState(url)
 }
 
 // ================== Master List Functions ==================
@@ -147,13 +135,13 @@ type DownloadEntry struct {
 	Status   string `json:"status"` // "paused", "completed", "error"
 }
 
-func getMasterListPath(surgeDir string) string {
-	return filepath.Join(surgeDir, "downloads.json")
+func getMasterListPath() string {
+	return filepath.Join(getSurgeDir(), "downloads.json")
 }
 
-// LoadMasterList loads the master downloads list
-func LoadMasterList(surgeDir string) (*MasterList, error) {
-	path := getMasterListPath(surgeDir)
+// LoadMasterList loads the master downloads list from global state directory
+func LoadMasterList() (*MasterList, error) {
+	path := getMasterListPath()
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -171,9 +159,10 @@ func LoadMasterList(surgeDir string) (*MasterList, error) {
 	return &list, nil
 }
 
-// SaveMasterList saves the master downloads list
-func SaveMasterList(surgeDir string, list *MasterList) error {
-	path := getMasterListPath(surgeDir)
+// SaveMasterList saves the master downloads list to global state directory
+func SaveMasterList(list *MasterList) error {
+	surgeDir := getSurgeDir()
+	path := getMasterListPath()
 
 	if err := os.MkdirAll(surgeDir, 0755); err != nil {
 		return fmt.Errorf("failed to create surge directory: %w", err)
@@ -192,8 +181,8 @@ func SaveMasterList(surgeDir string, list *MasterList) error {
 }
 
 // AddToMasterList adds or updates a download entry in the master list
-func AddToMasterList(surgeDir string, entry DownloadEntry) error {
-	list, err := LoadMasterList(surgeDir)
+func AddToMasterList(entry DownloadEntry) error {
+	list, err := LoadMasterList()
 	if err != nil {
 		list = &MasterList{Downloads: []DownloadEntry{}}
 	}
@@ -211,12 +200,12 @@ func AddToMasterList(surgeDir string, entry DownloadEntry) error {
 		list.Downloads = append(list.Downloads, entry)
 	}
 
-	return SaveMasterList(surgeDir, list)
+	return SaveMasterList(list)
 }
 
 // RemoveFromMasterList removes a download entry from the master list
-func RemoveFromMasterList(surgeDir string, urlHash string) error {
-	list, err := LoadMasterList(surgeDir)
+func RemoveFromMasterList(urlHash string) error {
+	list, err := LoadMasterList()
 	if err != nil {
 		return nil // Nothing to remove
 	}
@@ -230,12 +219,12 @@ func RemoveFromMasterList(surgeDir string, urlHash string) error {
 	}
 	list.Downloads = newDownloads
 
-	return SaveMasterList(surgeDir, list)
+	return SaveMasterList(list)
 }
 
 // LoadPausedDownloads returns all paused downloads from the master list
-func LoadPausedDownloads(surgeDir string) ([]DownloadEntry, error) {
-	list, err := LoadMasterList(surgeDir)
+func LoadPausedDownloads() ([]DownloadEntry, error) {
+	list, err := LoadMasterList()
 	if err != nil {
 		return nil, err
 	}
