@@ -691,6 +691,7 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 			offset += int64(readSoFar)
 			atomic.StoreInt64(&activeTask.CurrentOffset, offset)
 			atomic.AddInt64(&activeTask.WindowBytes, int64(readSoFar))
+			atomic.StoreInt64(&activeTask.LastActivity, now.UnixNano())
 
 			// Update EMA speed using sliding window (2 second window)
 			windowElapsed := now.Sub(activeTask.WindowStart).Seconds()
