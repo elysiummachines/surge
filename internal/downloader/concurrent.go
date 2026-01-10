@@ -494,15 +494,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl, destPath st
 	// Delete state file on successful completion
 	_ = DeleteState(d.URL)
 
-	// Print final stats only if download wasn't cancelled
-	if ctx.Err() == nil {
-		elapsed := time.Since(startTime)
-		speed := float64(fileSize) / elapsed.Seconds()
-		fmt.Fprintf(os.Stderr, "\nDownloaded %s in %s (%s/s)\n",
-			utils.ConvertBytesToHumanReadable(fileSize),
-			elapsed.Round(time.Millisecond),
-			utils.ConvertBytesToHumanReadable(int64(speed)))
-	}
+	// Note: Download completion notifications are handled by the TUI via DownloadCompleteMsg
 
 	return nil
 }

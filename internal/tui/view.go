@@ -190,11 +190,19 @@ func (m RootModel) View() string {
 	// Bottom Row
 	bottomRow := lipgloss.JoinHorizontal(lipgloss.Top, listBox, detailBox)
 
-	// Full Layout
+	// Footer - show notification if active, otherwise show keybindings
+	var footer string
+	if m.notification != "" {
+		footer = lipgloss.Place(m.width, 1, lipgloss.Center, lipgloss.Center,
+			NotificationStyle.Render(m.notification))
+	} else {
+		footer = lipgloss.NewStyle().Foreground(ColorGray).Padding(0, 1).Render(" [G] Add  [P] Pause  [D] Delete  [/] Filter  [Q] Quit")
+	}
+
 	return lipgloss.JoinVertical(lipgloss.Left,
 		topRow,
 		bottomRow,
-		lipgloss.NewStyle().Foreground(ColorGray).Padding(0, 1).Render(" [G] Add  [P] Pause  [D] Delete  [/] Filter  [Q] Quit"),
+		footer,
 	)
 }
 

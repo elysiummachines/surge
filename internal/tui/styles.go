@@ -81,4 +81,11 @@ var (
 	// Progress Bar Colors
 	ProgressStart = "#ff79c6" // Pink
 	ProgressEnd   = "#bd93f9" // Purple
+
+	// Notification Style
+	NotificationStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#282a36")).
+				Background(ColorNeonCyan).
+				Bold(true).
+				Padding(0, 2)
 )

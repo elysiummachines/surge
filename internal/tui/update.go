@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -13,6 +14,16 @@ import (
 	"github.com/charmbracelet/bubbles/progress"
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+// notificationTickMsg is sent to check if a notification should be cleared
+type notificationTickMsg struct{}
+
+// notificationTickCmd waits briefly then sends a tick to check notification expiry
+func notificationTickCmd() tea.Cmd {
+	return tea.Tick(500*time.Millisecond, func(time.Time) tea.Msg {
+		return notificationTickMsg{}
+	})
+}
 
 // Update handles messages and updates the model
 func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -123,6 +134,15 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Set progress to 100%
 				cmds = append(cmds, d.progress.SetPercent(1.0))
 
+				// Set notification
+				speed := float64(d.Total) / msg.Elapsed.Seconds()
+				m.notification = fmt.Sprintf("✔ Downloaded %s in %s (%.2f MB/s)",
+					d.Filename,
+					msg.Elapsed.Round(time.Millisecond),
+					speed/Megabyte)
+				m.notificationExpiry = time.Now().Add(5 * time.Second)
+				cmds = append(cmds, notificationTickCmd())
+
 				// Persist to history (TUI has the correct filename from DownloadStartedMsg)
 				_ = downloader.AddToMasterList(downloader.DownloadEntry{
 					URLHash:     downloader.URLHash(d.URL),
@@ -198,6 +218,16 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateListTitle()
 		m.UpdateListItems()
 		return m, nil
+
+	case notificationTickMsg:
+		// Check if notification should be cleared
+		if m.notification != "" && time.Now().After(m.notificationExpiry) {
+			m.notification = ""
+		} else if m.notification != "" {
+			// Keep ticking until notification expires
+			cmds = append(cmds, notificationTickCmd())
+		}
+		return m, tea.Batch(cmds...)
 
 	// Handle filepicker messages for all message types when in FilePickerState
 	default:

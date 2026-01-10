@@ -94,6 +94,10 @@ type RootModel struct {
 
 	// Graph Data
 	SpeedHistory []float64 // Stores the last ~60 ticks of speed data
+
+	// Notification system
+	notification       string    // Current notification message
+	notificationExpiry time.Time // When the notification should disappear
 }
 
 // NewDownloadModel creates a new download model with progress state and reporter
