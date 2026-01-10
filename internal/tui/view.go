@@ -129,9 +129,9 @@ func (m RootModel) View() string {
 	// --- SECTION 2: SPEED GRAPH (Top Right) ---
 	// Calculate dimensions
 	axisWidth := 12
-	// Use -3 (Left Border + Right Border + Margin) 
+	// Use -3 (Left Border + Right Border + Margin)
 	// This ensures it fills the box tight against the right side
-	graphContentWidth := rightWidth - axisWidth - 3 
+	graphContentWidth := rightWidth - axisWidth - 3
 	if graphContentWidth < 10 {
 		graphContentWidth = 10
 	}
@@ -149,9 +149,9 @@ func (m RootModel) View() string {
 	// Calculate Available Height for the Graph
 	// topHeight (9) - Borders (2) - Title/Spacer lines (2)
 	// Title/Speed takes 1 line, Spacer takes 1 line.
-	graphHeight := topHeight - 4 
-	if graphHeight < 1 { 
-		graphHeight = 1 
+	graphHeight := topHeight - 4
+	if graphHeight < 1 {
+		graphHeight = 1
 	}
 
 	// Render the Graph (Multi-line)
@@ -159,7 +159,7 @@ func (m RootModel) View() string {
 
 	// Create the Axis (Left side)
 	axisStyle := lipgloss.NewStyle().Width(axisWidth).Foreground(ColorGray).Align(lipgloss.Right)
-	
+
 	// Create Axis Labels
 	labelTop := axisStyle.Render(fmt.Sprintf("%.1f MB/s ", maxSpeed))
 	labelMid := axisStyle.Render(fmt.Sprintf("%.1f MB/s ", maxSpeed/2))
@@ -167,14 +167,14 @@ func (m RootModel) View() string {
 
 	// Build the axis column to match graphHeight exactly
 	var axisColumn string
-	
+
 	if graphHeight >= 5 {
 		// If we have enough space, show Top, Middle, Bottom
 		// Distribute spaces evenly
 		spacesTotal := graphHeight - 3 // 3 labels
 		spaceTop := spacesTotal / 2
 		spaceBot := spacesTotal - spaceTop
-		
+
 		axisColumn = lipgloss.JoinVertical(lipgloss.Right,
 			labelTop,
 			strings.Repeat("\n", spaceTop),
@@ -185,7 +185,9 @@ func (m RootModel) View() string {
 	} else {
 		// Compact mode: just Top and Bottom
 		spaces := graphHeight - 2
-		if spaces < 0 { spaces = 0 }
+		if spaces < 0 {
+			spaces = 0
+		}
 		axisColumn = lipgloss.JoinVertical(lipgloss.Right,
 			labelTop,
 			strings.Repeat("\n", spaces),
@@ -224,7 +226,7 @@ func (m RootModel) View() string {
 	if len(m.list.Items()) == 0 {
 		// FIX: Reduced width (leftWidth-8) to account for padding (4) and borders (2) + safety
 		// preventing the "floating bits" wrap-around artifact.
-		listContentHeight := bottomHeight - 6 
+		listContentHeight := bottomHeight - 6
 		listContent = lipgloss.Place(leftWidth-8, listContentHeight, lipgloss.Center, lipgloss.Center,
 			lipgloss.NewStyle().Foreground(ColorNeonCyan).Render("No downloads"))
 	} else {
@@ -388,8 +390,8 @@ func renderMultiLineGraph(data []float64, width, height int, maxVal float64, col
 		for j := range rows[i] {
 			// Draw horizontal lines on every other row (or every row if you prefer)
 			// Using "╌" gives a nice technical dashed look. "─" is a solid line.
-			if i%2 == 0 { 
-				rows[i][j] = gridStyle.Render("╌") 
+			if i%2 == 0 {
+				rows[i][j] = gridStyle.Render("╌")
 			} else {
 				rows[i][j] = " "
 			}
@@ -402,7 +404,7 @@ func renderMultiLineGraph(data []float64, width, height int, maxVal float64, col
 		visibleData = data[len(data)-width:]
 	} else {
 		// If not enough data, we process what we have.
-		// We do NOT pad with 0s here, because we want the grid 
+		// We do NOT pad with 0s here, because we want the grid
 		// to show through on the left side.
 		visibleData = data
 	}
@@ -416,32 +418,36 @@ func renderMultiLineGraph(data []float64, width, height int, maxVal float64, col
 
 	for x, val := range visibleData {
 		// Actual X position on the canvas
-		canvasX := offset + x 
-		
-		if val < 0 { val = 0 }
+		canvasX := offset + x
+
+		if val < 0 {
+			val = 0
+		}
 
 		// Calculate height in "sub-blocks"
 		pct := val / maxVal
-		if pct > 1.0 { pct = 1.0 }
+		if pct > 1.0 {
+			pct = 1.0
+		}
 		totalSubBlocks := pct * float64(height) * 8.0
 
 		// Fill rows from bottom up
 		for y := 0; y < height; y++ {
 			rowIndex := height - 1 - y // 0 is top, height-1 is bottom
-			
+
 			// Calculate block value for this specific row
 			rowValue := totalSubBlocks - float64(y*8)
 
 			var char string
 			if rowValue <= 0 {
 				// No data for this height? Keep the grid background!
-				continue 
+				continue
 			} else if rowValue >= 8 {
 				char = "█"
 			} else {
 				char = blocks[int(rowValue)]
 			}
-			
+
 			// Overwrite the grid with the data bar
 			rows[rowIndex][canvasX] = barStyle.Render(char)
 		}
@@ -462,6 +468,10 @@ func renderMultiLineGraph(data []float64, width, height int, maxVal float64, col
 func (m RootModel) calcTotalSpeed() float64 {
 	total := 0.0
 	for _, d := range m.downloads {
+		// Skip completed downloads
+		if d.done {
+			continue
+		}
 		total += d.Speed
 	}
 	return total / Megabyte
