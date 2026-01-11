@@ -779,12 +779,17 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			case "enter":
+				key := m.getCurrentSettingKey()
+				// Prevent editing ignored settings
+				if key == "max_global_connections" {
+					return m, nil
+				}
+
 				// Toggle bool or enter edit mode for other types
 				typ := m.getCurrentSettingType()
 				if typ == "bool" {
 					categories := config.CategoryOrder()
 					currentCategory := categories[m.SettingsActiveTab]
-					key := m.getCurrentSettingKey()
 					m.setSettingValue(currentCategory, key, "")
 				} else {
 					// Enter edit mode
@@ -793,17 +798,20 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					categories := config.CategoryOrder()
 					currentCategory := categories[m.SettingsActiveTab]
 					values := m.getSettingsValues(currentCategory)
-					key := m.getCurrentSettingKey()
 					m.SettingsInput.SetValue(formatSettingValueForEdit(values[key], typ, key))
 					m.SettingsInput.Focus()
 				}
 				return m, nil
 			case "r", "R":
+				key := m.getCurrentSettingKey()
+				if key == "max_global_connections" {
+					return m, nil
+				}
+
 				// Reset current setting to default
 				defaults := config.DefaultSettings()
 				categories := config.CategoryOrder()
 				currentCategory := categories[m.SettingsActiveTab]
-				key := m.getCurrentSettingKey()
 				m.resetSettingToDefault(currentCategory, key, defaults)
 				return m, nil
 

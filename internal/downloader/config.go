@@ -139,3 +139,43 @@ const (
 	speedEMAAlpha       = 0.3             // EMA smoothing factor
 	minAbsoluteSpeed    = 100 * KB        // Don't cancel workers above this speed
 )
+
+// GetMaxTaskRetries returns configured value or default
+func (r *RuntimeConfig) GetMaxTaskRetries() int {
+	if r == nil || r.MaxTaskRetries <= 0 {
+		return maxTaskRetries
+	}
+	return r.MaxTaskRetries
+}
+
+// GetSlowWorkerThreshold returns configured value or default
+func (r *RuntimeConfig) GetSlowWorkerThreshold() float64 {
+	if r == nil || r.SlowWorkerThreshold <= 0 {
+		return slowWorkerThreshold
+	}
+	return r.SlowWorkerThreshold
+}
+
+// GetSlowWorkerGracePeriod returns configured value or default
+func (r *RuntimeConfig) GetSlowWorkerGracePeriod() time.Duration {
+	if r == nil || r.SlowWorkerGracePeriod <= 0 {
+		return slowWorkerGrace
+	}
+	return r.SlowWorkerGracePeriod
+}
+
+// GetStallTimeout returns configured value or default
+func (r *RuntimeConfig) GetStallTimeout() time.Duration {
+	if r == nil || r.StallTimeout <= 0 {
+		return stallTimeout
+	}
+	return r.StallTimeout
+}
+
+// GetSpeedEmaAlpha returns configured value or default
+func (r *RuntimeConfig) GetSpeedEmaAlpha() float64 {
+	if r == nil || r.SpeedEmaAlpha <= 0 {
+		return speedEMAAlpha
+	}
+	return r.SpeedEmaAlpha
+}

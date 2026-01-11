@@ -542,7 +542,8 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, rawurl string
 		}
 
 		var lastErr error
-		for attempt := 0; attempt < maxTaskRetries; attempt++ {
+		maxRetries := d.Runtime.GetMaxTaskRetries()
+		for attempt := 0; attempt < maxRetries; attempt++ {
 			if attempt > 0 {
 				time.Sleep(time.Duration(1<<attempt) * retryBaseDelay) //Exponential backoff incase of failure
 			}
@@ -633,7 +634,7 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, rawurl string
 			// If we modified StopAt we should probably reset it or push the remaining part?
 			// TODO: Could optimize by pushing only remaining part if we track that.
 			queue.Push(task)
-			utils.Debug("task at offset %d failed after %d retries: %v", task.Offset, maxTaskRetries, lastErr)
+			utils.Debug("task at offset %d failed after %d retries: %v", task.Offset, maxRetries, lastErr)
 		}
 	}
 }
@@ -718,10 +719,11 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 				recentSpeed := float64(windowBytes) / windowElapsed
 
 				activeTask.SpeedMu.Lock()
+				alpha := d.Runtime.GetSpeedEmaAlpha()
 				if activeTask.Speed == 0 {
 					activeTask.Speed = recentSpeed
 				} else {
-					activeTask.Speed = (1-speedEMAAlpha)*activeTask.Speed + speedEMAAlpha*recentSpeed
+					activeTask.Speed = (1-alpha)*activeTask.Speed + alpha*recentSpeed
 				}
 				activeTask.SpeedMu.Unlock()
 
@@ -866,11 +868,13 @@ func (d *ConcurrentDownloader) checkWorkerHealth() {
 		taskDuration := now.Sub(active.StartTime)
 
 		// Skip workers that are still in their grace period
-		if taskDuration < slowWorkerGrace {
+		gracePeriod := d.Runtime.GetSlowWorkerGracePeriod()
+		if taskDuration < gracePeriod {
 			continue
 		}
 
 		// Check for stalled worker (no activity for stallTimeout)
+		stallTimeout := d.Runtime.GetStallTimeout()
 		lastActivity := time.Unix(0, active.LastActivity)
 		if now.Sub(lastActivity) > stallTimeout {
 			utils.Debug("Health: Worker %d stalled (no activity for %v), cancelling", workerID, now.Sub(lastActivity))
@@ -887,7 +891,8 @@ func (d *ConcurrentDownloader) checkWorkerHealth() {
 			workerSpeed := active.Speed
 			active.SpeedMu.Unlock()
 
-			isBelowThreshold := workerSpeed > 0 && workerSpeed < slowWorkerThreshold*meanSpeed
+			threshold := d.Runtime.GetSlowWorkerThreshold()
+			isBelowThreshold := workerSpeed > 0 && workerSpeed < threshold*meanSpeed
 			isBelowMinimum := workerSpeed < float64(minAbsoluteSpeed)
 
 			if isBelowThreshold && isBelowMinimum {

@@ -95,14 +95,23 @@ func (m RootModel) viewSettings() string {
 
 		// Highlight selected row
 		if i == m.SettingsSelectedRow {
-			line = lipgloss.NewStyle().
-				Foreground(ColorNeonPink).
-				Bold(true).
-				Render("> " + line)
+			style := lipgloss.NewStyle().Foreground(ColorNeonPink).Bold(true)
+			cursor := "> "
+
+			if meta.Key == "max_global_connections" {
+				style = lipgloss.NewStyle().Foreground(ColorGray)
+				cursor = "# "
+			}
+
+			line = style.Render(cursor + line)
 		} else {
-			line = lipgloss.NewStyle().
-				Foreground(ColorLightGray).
-				Render("  " + line)
+			style := lipgloss.NewStyle().Foreground(ColorLightGray)
+
+			if meta.Key == "max_global_connections" {
+				style = lipgloss.NewStyle().Foreground(lipgloss.Color("238")) // Darker gray
+			}
+
+			line = style.Render("  " + line)
 		}
 
 		listLines = append(listLines, line)
@@ -137,6 +146,10 @@ func (m RootModel) viewSettings() string {
 		} else {
 			// Show formatted value with unit
 			valueStr = formatSettingValueForEdit(value, meta.Type, meta.Key) + unitStyle.Render(unit)
+
+			if meta.Key == "max_global_connections" {
+				valueStr += " (Ignored)"
+			}
 		}
 
 		// Show Tab hint for directory settings
