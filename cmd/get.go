@@ -111,7 +111,9 @@ Use --port to send the download to a running Surge instance.`,
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		port, _ := cmd.Flags().GetInt("port")
 
-		if outPath == "" {
+		if outPath == "" && port == 0 {
+			// Only default to "." for headless mode.
+			// For server mode (port > 0), send empty path so TUI uses its default.
 			outPath = "."
 		}
 

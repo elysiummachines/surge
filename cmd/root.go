@@ -146,9 +146,10 @@ func handleDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Path == "" {
-		req.Path = "."
-	}
+	// Don't default to "." here, let TUI handle it
+	// if req.Path == "" {
+	// 	req.Path = "."
+	// }
 
 	utils.Debug("Received download request: URL=%s, Path=%s", req.URL, req.Path)
 
