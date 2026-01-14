@@ -53,7 +53,7 @@ func (m RootModel) View() string {
 		// Apply padding to the content before boxing it
 		paddedContent := lipgloss.NewStyle().Padding(0, 2).Render(content)
 
-		box := renderBtopBox("Add Download", paddedContent, 80, 11, ColorNeonPink, false)
+		box := renderBtopBox(PaneTitleStyle.Render(" Add Download "), "", paddedContent, 80, 11, ColorNeonPink)
 
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
 	}
@@ -70,7 +70,7 @@ func (m RootModel) View() string {
 
 		paddedContent := lipgloss.NewStyle().Padding(0, 2).Render(pickerContent)
 
-		box := renderBtopBox("Select Directory", paddedContent, 80, 20, ColorNeonPink, false)
+		box := renderBtopBox(PaneTitleStyle.Render(" Select Directory "), "", paddedContent, 80, 20, ColorNeonPink)
 
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
 	}
@@ -172,7 +172,7 @@ func (m RootModel) View() string {
 	if m.logFocused {
 		logBorderColor = ColorNeonPink
 	}
-	logBox := renderBtopBox("Activity Log", logContent, logWidth, headerHeight, logBorderColor, false)
+	logBox := renderBtopBox(PaneTitleStyle.Render(" Activity Log "), "", logContent, logWidth, headerHeight, logBorderColor)
 
 	// Combine logo and log box horizontally
 	headerBox := lipgloss.JoinHorizontal(lipgloss.Top, logoBox, logBox)
@@ -325,16 +325,16 @@ func (m RootModel) View() string {
 	)
 
 	// Render single network activity box containing stats + graph
-	graphBox := renderBtopBox("Network Activity", graphWithPadding, rightWidth, graphHeight, ColorNeonCyan, false)
+	graphBox := renderBtopBox(PaneTitleStyle.Render(" Network Activity "), "", graphWithPadding, rightWidth, graphHeight, ColorNeonCyan)
 
 	// --- SECTION 3: DOWNLOAD LIST (Bottom Left) ---
 	// Tab Bar
 	tabBar := renderTabs(m.activeTab, active, queued, downloaded)
 
 	// Search bar (shown when search is active or has a query)
-	var searchBar string
+	var leftTitle string
 	if m.searchActive || m.searchQuery != "" {
-		searchIcon := lipgloss.NewStyle().Foreground(ColorNeonCyan).Render("🔍 ")
+		searchIcon := lipgloss.NewStyle().Foreground(ColorNeonCyan).Render("> ")
 		var searchDisplay string
 		if m.searchActive {
 			searchDisplay = m.searchInput.View() +
@@ -344,7 +344,8 @@ func (m RootModel) View() string {
 			searchDisplay = lipgloss.NewStyle().Foreground(ColorNeonPink).Render(m.searchQuery) +
 				lipgloss.NewStyle().Foreground(ColorGray).Render(" [f to clear]")
 		}
-		searchBar = lipgloss.JoinHorizontal(lipgloss.Left, searchIcon, searchDisplay)
+		// Pad the search bar to look like a title block
+		leftTitle = " " + lipgloss.JoinHorizontal(lipgloss.Left, searchIcon, searchDisplay) + " "
 	}
 
 	// Render the bubbles list or centered empty message
@@ -366,13 +367,8 @@ func (m RootModel) View() string {
 		listContent = m.list.View()
 	}
 
-	// Build list inner content
-	var listInnerContent string
-	if searchBar != "" {
-		listInnerContent = lipgloss.JoinVertical(lipgloss.Left, searchBar, tabBar, listContent)
-	} else {
-		listInnerContent = lipgloss.JoinVertical(lipgloss.Left, tabBar, listContent)
-	}
+	// Build list inner content - No search bar inside
+	listInnerContent := lipgloss.JoinVertical(lipgloss.Left, tabBar, listContent)
 	listInner := lipgloss.NewStyle().Padding(1, 2).Render(listInnerContent)
 
 	// Determine border color for downloads box based on focus
@@ -380,7 +376,7 @@ func (m RootModel) View() string {
 	if m.logFocused {
 		downloadsBorderColor = ColorDarkGray
 	}
-	listBox := renderBtopBox("Downloads", listInner, leftWidth, listHeight, downloadsBorderColor, true)
+	listBox := renderBtopBox(leftTitle, PaneTitleStyle.Render(" Downloads "), listInner, leftWidth, listHeight, downloadsBorderColor)
 
 	// --- SECTION 4: DETAILS PANE (Bottom Right) ---
 	var detailContent string
@@ -391,7 +387,7 @@ func (m RootModel) View() string {
 			lipgloss.NewStyle().Foreground(ColorNeonCyan).Render("No Download Selected"))
 	}
 
-	detailBox := renderBtopBox("File Details", detailContent, rightWidth, detailHeight, ColorDarkGray, true)
+	detailBox := renderBtopBox("", PaneTitleStyle.Render(" File Details "), detailContent, rightWidth, detailHeight, ColorDarkGray)
 
 	// --- ASSEMBLY ---
 
@@ -712,10 +708,10 @@ func renderTabs(activeTab, activeCount, queuedCount, doneCount int) string {
 }
 
 // renderBtopBox creates a btop-style box with title embedded in the top border
-// titleRight: if true, title appears on the right side; if false, title appears on the left
-// Example (left):  ╭─ TITLE ─────────────────────────────────╮
-// Example (right): ╭─────────────────────────────────── TITLE ─╮
-func renderBtopBox(title string, content string, width, height int, borderColor lipgloss.Color, titleRight bool) string {
+// Supports left and right titles (e.g., search on left, pane name on right)
+// Accepts pre-styled title strings
+// Example: ╭─ 🔍 Search... ─────────── Downloads ─╮
+func renderBtopBox(leftTitle, rightTitle string, content string, width, height int, borderColor lipgloss.Color) string {
 	// Border characters
 	const (
 		topLeft     = "╭"
@@ -730,29 +726,56 @@ func renderBtopBox(title string, content string, width, height int, borderColor 
 		innerWidth = 1
 	}
 
-	titleText := fmt.Sprintf(" %s ", title)
-	titleWidth := lipgloss.Width(titleText)
+	leftTitleWidth := lipgloss.Width(leftTitle)
+	rightTitleWidth := lipgloss.Width(rightTitle)
 
-	remainingWidth := innerWidth - titleWidth - 1
-	if remainingWidth < 0 {
-		remainingWidth = 0
-	}
+	// Calculate remaining horizontal space for the border
+	// Structure: ╭ + horizontal*? + leftTitle + horizontal*? + rightTitle + horizontal*? + ╮
+	// Basic structure we want:
+	// If leftTitle exists: ╭─ leftTitle ──...
+	// If rightTitle exists: ...── rightTitle ─╮
 
-	var topBorder string
 	borderStyler := lipgloss.NewStyle().Foreground(borderColor)
-	titleStyler := lipgloss.NewStyle().Foreground(ColorNeonCyan).Bold(true)
+	var topBorder string
 
-	if titleRight {
-		// Title on the right
-		topBorder = borderStyler.Render(topLeft+strings.Repeat(horizontal, remainingWidth)) +
-			titleStyler.Render(titleText) +
-			borderStyler.Render(horizontal+topRight)
-	} else {
-		// Title on the left
+	// Case 1: Both Titles
+	if leftTitle != "" && rightTitle != "" {
+		remainingWidth := innerWidth - leftTitleWidth - rightTitleWidth - 1 // 1 for the start dash
+		if remainingWidth < 1 {
+			remainingWidth = 1 // overflow mitigation (might break layout but prevents crash)
+		}
+
 		topBorder = borderStyler.Render(topLeft+horizontal) +
-			titleStyler.Render(titleText) +
+			leftTitle +
 			borderStyler.Render(strings.Repeat(horizontal, remainingWidth)) +
+			rightTitle +
 			borderStyler.Render(topRight)
+
+	} else if leftTitle != "" {
+		// Case 2: Only Left Title
+		remainingWidth := innerWidth - leftTitleWidth - 1
+		if remainingWidth < 0 {
+			remainingWidth = 0
+		}
+
+		topBorder = borderStyler.Render(topLeft+horizontal) +
+			leftTitle +
+			borderStyler.Render(strings.Repeat(horizontal, remainingWidth)+topRight)
+
+	} else if rightTitle != "" {
+		// Case 3: Only Right Title
+		remainingWidth := innerWidth - rightTitleWidth - 1
+		if remainingWidth < 0 {
+			remainingWidth = 0
+		}
+
+		topBorder = borderStyler.Render(topLeft+strings.Repeat(horizontal, remainingWidth)) +
+			rightTitle +
+			borderStyler.Render(horizontal+topRight)
+
+	} else {
+		// Case 4: No Title
+		topBorder = borderStyler.Render(topLeft + strings.Repeat(horizontal, innerWidth) + topRight)
 	}
 
 	// Build bottom border: ╰───────────────────╯

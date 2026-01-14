@@ -153,7 +153,7 @@ func (m RootModel) viewSettings() string {
 		helpText,
 	)
 
-	box := renderBtopBox("Settings", fullContent, width, height, ColorNeonPink, false)
+	box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", fullContent, width, height, ColorNeonPink)
 
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
 }
