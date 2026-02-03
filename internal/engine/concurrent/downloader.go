@@ -234,6 +234,11 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 			utils.ConvertBytesToHumanReadable(chunkSize))
 	}
 
+	// Initialize chunk visualization
+	if d.State != nil {
+		d.State.InitBitmap(fileSize, chunkSize)
+	}
+
 	// Create and preallocate output file with .surge suffix
 	outFile, err := os.OpenFile(workingPath, os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
@@ -255,6 +260,16 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 			d.State.SetSavedElapsed(time.Duration(savedState.Elapsed))
 			// Fix speed spike: sync session start so we don't count previous bytes as new speed
 			d.State.SyncSessionStart()
+
+			// RESTORE CHUNK BITMAP if available
+			if len(savedState.ChunkBitmap) > 0 && savedState.ActualChunkSize > 0 {
+				d.State.RestoreBitmap(savedState.ChunkBitmap, savedState.ActualChunkSize)
+
+				// Reconstruct internal progress from remaining tasks to ensure partial chunks are handled correctly
+				d.State.RecalculateProgress(savedState.Tasks)
+
+				utils.Debug("Restored chunk map: size %d", savedState.ActualChunkSize)
+			}
 		}
 		utils.Debug("Resuming from saved state: %d tasks, %d bytes downloaded", len(tasks), savedState.Downloaded)
 	} else {
@@ -280,7 +295,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	defer cancelBalancer()
 
 	go func() {
-		ticker := time.NewTicker(50 * time.Millisecond)
+		ticker := time.NewTicker(200 * time.Millisecond)
 		defer ticker.Stop()
 
 		for {
@@ -426,23 +441,32 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 
 		// Calculate total elapsed time
 		var totalElapsed time.Duration
+		var chunkBitmap []byte
+		var actualChunkSize int64
+
 		if d.State != nil {
 			totalElapsed = d.State.SavedElapsed + time.Since(startTime)
+			// Get persisted bitmap data
+			bitmap, _, _, chunkSize, _ := d.State.GetBitmap()
+			chunkBitmap = bitmap
+			actualChunkSize = chunkSize
 		} else {
 			totalElapsed = time.Since(startTime)
 		}
 
 		// Save state for resume (use computed value for consistency)
 		s := &types.DownloadState{
-			URL:        d.URL,
-			ID:         d.ID,
-			DestPath:   destPath,
-			TotalSize:  fileSize,
-			Downloaded: computedDownloaded,
-			Tasks:      remainingTasks,
-			Filename:   filepath.Base(destPath),
-			Elapsed:    totalElapsed.Nanoseconds(),
-			Mirrors:    candidateMirrors,
+			URL:             d.URL,
+			ID:              d.ID,
+			DestPath:        destPath,
+			TotalSize:       fileSize,
+			Downloaded:      computedDownloaded,
+			Tasks:           remainingTasks,
+			Filename:        filepath.Base(destPath),
+			Elapsed:         totalElapsed.Nanoseconds(),
+			Mirrors:         candidateMirrors,
+			ChunkBitmap:     chunkBitmap,
+			ActualChunkSize: actualChunkSize,
 		}
 		if err := state.SaveState(d.URL, destPath, s); err != nil {
 			utils.Debug("Failed to save pause state: %v", err)

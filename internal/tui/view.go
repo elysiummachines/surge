@@ -161,8 +161,12 @@ func (m RootModel) View() string {
 
 	// === MAIN DASHBOARD LAYOUT ===
 
-	availableHeight := m.height - 2 // Margin
-	availableWidth := m.width - 4   // Margin
+	footerHeight := 1                              // Footer is just one line of text
+	availableHeight := m.height - 1 - footerHeight // maximized height with 1 line margin
+	if availableHeight < 10 {
+		availableHeight = 10 // Minimum safe height
+	}
+	availableWidth := m.width - 4 // Margin
 
 	// Column Widths
 	leftWidth := int(float64(availableWidth) * ListWidthRatio)
@@ -177,14 +181,106 @@ func (m RootModel) View() string {
 	}
 
 	// --- RIGHT COLUMN HEIGHTS ---
-	graphHeight := availableHeight / 3
-	if graphHeight < 9 {
-		graphHeight = 9
+	// Priority 1: Details (Fixed content + Padding)
+	// Priority 2: ChunkMap (Dynamic / Exact needed)
+	// Priority 3: Graph (Remainder)
+
+	// Pre-calculate Detail Content to determine exact height needed
+	var detailContent string
+	selected := m.GetSelectedDownload()
+	if selected != nil {
+		detailContent = renderFocusedDetails(selected, rightWidth-4)
+	} else {
+		// Default Placeholder
+		detailContent = lipgloss.Place(rightWidth-4, 8, lipgloss.Center, lipgloss.Center,
+			lipgloss.NewStyle().Foreground(ColorNeonCyan).Render("No Download Selected"))
 	}
-	detailHeight := availableHeight - graphHeight
-	if detailHeight < 10 {
-		detailHeight = 10
+
+	// Exact height from content + borders
+	detailHeight := lipgloss.Height(detailContent) + 2
+
+	// Calculate Available Height for Rest
+	remainingHeight := availableHeight - detailHeight
+
+	// Calculate Chunk Map Needs
+	chunkMapHeight := 0
+	chunkMapNeeded := 0
+	showChunkMap := false
+
+	if selected != nil {
+		// Show Chunk Map only if:
+		// 1. Not Done (Completed)
+		// 2. Not Queued (Speed > 0 OR Paused OR Has Chunks)
+
+		bitmap, width, _, _, _ := selected.state.GetBitmap()
+		hasChunks := selected.state != nil && len(bitmap) > 0 && width > 0
+		isQueued := !selected.paused && selected.Speed == 0 && !hasChunks
+
+		if !selected.done && !isQueued {
+			showChunkMap = true
+		}
 	}
+
+	if showChunkMap {
+		_, bitmapWidth, _, _, _ := selected.state.GetBitmap()
+		// chunkMapWidth = rightWidth - 4 (box border) - 2 (inner padding) = rightWidth - 6
+		contentLines := components.CalculateHeight(bitmapWidth, rightWidth-6)
+		if contentLines > 0 {
+			// +2 for border, +2 for padding
+			chunkMapNeeded = contentLines + 4
+		} else {
+			// Minimum for message "Chunk visualization not available"
+			chunkMapNeeded = 6
+		}
+	}
+
+	// Define Minimum Graph Height
+	minGraphHeight := 9
+	var graphHeight int
+
+	// Determine Layout
+	if remainingHeight-chunkMapNeeded >= minGraphHeight {
+		// Sufficient space for everything
+		chunkMapHeight = chunkMapNeeded
+		if !showChunkMap {
+			// User wants 4:6 ratio for Graph:Details
+			targetGraphHeight := int(float64(availableHeight) * 0.4)
+			targetDetailHeight := availableHeight - targetGraphHeight
+
+			// Ensure Graph meets minimum
+			if targetGraphHeight < minGraphHeight {
+				targetGraphHeight = minGraphHeight
+				targetDetailHeight = availableHeight - targetGraphHeight
+			}
+
+			// Assign
+			graphHeight = targetGraphHeight
+			detailHeight = targetDetailHeight
+			chunkMapHeight = 0
+		} else {
+			graphHeight = remainingHeight - chunkMapHeight
+		}
+	} else {
+		// Not enough space, prioritize Graph Min Height, then squeeze ChunkMap
+		graphHeight = minGraphHeight
+		chunkMapHeight = remainingHeight - graphHeight
+
+		// If ChunkMap gets squeezed too much, we might need to squeeze Graph purely to survive
+		if chunkMapHeight < 4 {
+			// Check if we can start eating into Graph's minimum?
+			// Let's enforce a hard floor for ChunkMap
+			chunkMapHeight = 4
+			graphHeight = remainingHeight - chunkMapHeight
+			// If graphHeight becomes negative, the whole UI is too small,
+			// renderBtopBox will handle truncation, but visual will be broken.
+			if graphHeight < 2 {
+				graphHeight = 2
+			}
+		}
+	}
+
+	// Recalculate Graph Area for rendering usage later
+	// graphHeight is now set vertically.
 
 	// --- SECTION 1: HEADER & LOGO (Top Left) + LOG BOX (Top Right) ---
 	logoText := `
@@ -434,24 +530,39 @@ func (m RootModel) View() string {
 	}
 	listBox := renderBtopBox(leftTitle, PaneTitleStyle.Render(" Downloads "), listInner, leftWidth, listHeight, downloadsBorderColor)
 
-	// --- SECTION 4: DETAILS PANE (Bottom Right) ---
-	var detailContent string
-	if d := m.GetSelectedDownload(); d != nil {
-		detailContent = renderFocusedDetails(d, rightWidth-4)
-	} else {
-		detailContent = lipgloss.Place(rightWidth-4, detailHeight-4, lipgloss.Center, lipgloss.Center,
-			lipgloss.NewStyle().Foreground(ColorNeonCyan).Render("No Download Selected"))
-	}
+	// --- SECTION 4: DETAILS PANE (Middle Right) ---
+	// detailContent and selected are already calculated in the layout section
 
 	detailBox := renderBtopBox("", PaneTitleStyle.Render(" File Details "), detailContent, rightWidth, detailHeight, ColorGray)
+
+	// --- SECTION 5: CHUNK MAP PANE (Bottom Right) ---
+	var chunkBox string
+	if showChunkMap {
+		var chunkContent string
+		if selected != nil {
+			// New chunk map component
+			bitmap, bitmapWidth, totalSize, chunkSize, chunkProgress := selected.state.GetBitmap()
+			chunkMap := components.NewChunkMapModel(bitmap, bitmapWidth, rightWidth-6, selected.paused, totalSize, chunkSize, chunkProgress)
+			chunkContent = lipgloss.NewStyle().Padding(0, 2, 1, 2).Render(chunkMap.View())
+
+			// If no chunks (not initialized or small file), show message
+			if bitmapWidth == 0 {
+				msg := "Chunk visualization not available"
+				chunkContent = lipgloss.Place(rightWidth-4, chunkMapHeight-2, lipgloss.Center, lipgloss.Center,
+					lipgloss.NewStyle().Foreground(ColorGray).Render(msg))
+			}
+		}
+
+		chunkBox = renderBtopBox("", PaneTitleStyle.Render(" Chunk Map "), chunkContent, rightWidth, chunkMapHeight, ColorGray)
+	}
 
 	// --- ASSEMBLY ---
 
 	// Left Column
 	leftColumn := lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox)
 
-	// Right Column
-	rightColumn := lipgloss.JoinVertical(lipgloss.Left, graphBox, detailBox)
+	// Right Column (Graph + Detail + Chunk)
+	rightColumn := lipgloss.JoinVertical(lipgloss.Left, graphBox, detailBox, chunkBox)
 
 	// Body
 	body := lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, rightColumn)
@@ -473,9 +584,20 @@ func renderFocusedDetails(d *DownloadModel, w int) string {
 	}
 
 	// Consistent content width for centering
-	contentWidth := w - 6
+	contentWidth := w - 4
 
-	// Status Box
+	// Separator Style
+	divider := lipgloss.NewStyle().
+		Foreground(ColorGray).
+		Width(contentWidth).
+		Render("\n" + strings.Repeat("─", contentWidth) + "\n")
+
+	// Padding Style for sections
+	sectionStyle := lipgloss.NewStyle().
+		Width(contentWidth).
+		Padding(0, 1)
+
+	// --- 1. Status Section ---
 	statusStr := getDownloadStatus(d)
 	statusStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -485,243 +607,134 @@ func renderFocusedDetails(d *DownloadModel, w int) string {
 
 	statusBox := statusStyle.Render(statusStr)
 
-	// Section divider
-	divider := lipgloss.NewStyle().
-		Foreground(ColorGray).
-		Render(strings.Repeat("─", contentWidth))
-
-	// File info section - Status removed from here
-	fileInfoLines := []string{
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("Filename:"), StatsValueStyle.Render(truncateString(d.Filename, contentWidth-14))),
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("Filepath:"), StatsValueStyle.Render(truncateString(d.Destination, contentWidth-14))),
-	}
-
-	// Size display differs based on completed status
-	if d.done {
-		fileInfoLines = append(fileInfoLines,
-			lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("Size:"), StatsValueStyle.Render(utils.ConvertBytesToHumanReadable(d.Total))),
-		)
-	} else {
-		fileInfoLines = append(fileInfoLines,
-			lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("Size:"), StatsValueStyle.Render(fmt.Sprintf("%s / %s", utils.ConvertBytesToHumanReadable(d.Downloaded), utils.ConvertBytesToHumanReadable(d.Total)))),
-		)
-	}
-
-	fileInfo := lipgloss.JoinVertical(lipgloss.Left, fileInfoLines...)
-
-	// Mirrors/URL Section
-	// We replace specific URL section with a mirrors list if available
-	var sourceSection string
-
-	if d.state != nil && len(d.state.GetMirrors()) > 0 {
-		mirrors := d.state.GetMirrors()
-		var mirrorLines []string
-		mirrorLines = append(mirrorLines, StatsLabelStyle.Render("Mirrors:"))
-
-		for _, m := range mirrors {
-			icon := "✔"
-			color := ColorStateDone
-			if m.Error {
-				icon = "✖"
-				color = ColorStateError
-			}
-
-			line := lipgloss.JoinHorizontal(lipgloss.Left,
-				lipgloss.NewStyle().Foreground(color).PaddingRight(1).Render(icon),
-				lipgloss.NewStyle().Foreground(ColorLightGray).Render(truncateString(m.URL, contentWidth-16)),
-			)
-			mirrorLines = append(mirrorLines, line)
-		}
-		sourceSection = lipgloss.JoinVertical(lipgloss.Left, mirrorLines...)
-	} else {
-		// Fallback to simple URL line if no mirrors info available
-		sourceSection = lipgloss.JoinHorizontal(lipgloss.Left,
-			StatsLabelStyle.Render("URL:"),
-			lipgloss.NewStyle().Foreground(ColorLightGray).Render(truncateString(d.URL, contentWidth-14)),
-		)
-	}
-
-	IDSection := lipgloss.JoinHorizontal(lipgloss.Left,
-		StatsLabelStyle.Render("ID:"),
-		lipgloss.NewStyle().Foreground(ColorLightGray).Render(d.ID),
+	// --- 2. File Information Section ---
+	fileInfoContent := lipgloss.JoinVertical(lipgloss.Left,
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("File: "), StatsValueStyle.Render(truncateString(d.Filename, contentWidth-8))),
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("Path: "), StatsValueStyle.Render(truncateString(d.Destination, contentWidth-8))),
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("ID:   "), lipgloss.NewStyle().Foreground(ColorLightGray).Render(d.ID)),
 	)
+	fileSection := sectionStyle.Render(fileInfoContent)
 
-	// For errored downloads, show error details
-	if d.err != nil {
-		errorStyle := lipgloss.NewStyle().Foreground(ColorStateError).Width(contentWidth - 4)
-		errorLabel := lipgloss.NewStyle().Foreground(ColorStateError).Bold(true).Render("Error Details")
-
-		// Word wrap the error message
-		errMsg := d.err.Error()
-
-		errorSection := lipgloss.JoinVertical(lipgloss.Left,
-			errorLabel,
-			"",
-			errorStyle.Render(errMsg),
-		)
-
-		content := lipgloss.JoinVertical(lipgloss.Left,
-			statusBox,
-			"",
-			fileInfo,
-			"",
-			divider,
-			"",
-			errorSection,
-			"",
-			divider,
-			"",
-			sourceSection,
-			IDSection,
-		)
-
-		return lipgloss.NewStyle().
-			Padding(0, 2).
-			Render(content)
-	}
-
-	// For completed downloads, show simplified view
-	if d.done {
-		// Calculate average speed for completed download
-		var avgSpeedStr string
-		if d.Elapsed.Seconds() > 0 {
-			avgSpeed := float64(d.Total) / d.Elapsed.Seconds()
-			avgSpeedStr = fmt.Sprintf("%.2f MB/s", avgSpeed/Megabyte)
-		} else {
-			avgSpeedStr = "N/A"
-		}
-
-		statsSection := lipgloss.JoinVertical(lipgloss.Left,
-			lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("Time Taken:"), StatsValueStyle.Render(d.Elapsed.Round(time.Second).String())),
-			lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("Avg Speed:"), StatsValueStyle.Render(avgSpeedStr)),
-		)
-
-		content := lipgloss.JoinVertical(lipgloss.Left,
-			statusBox,
-			"",
-			IDSection,
-			fileInfo,
-			"",
-			divider,
-			"",
-			statsSection,
-			"",
-			divider,
-			"",
-			sourceSection,
-		)
-
-		return lipgloss.NewStyle().
-			Padding(0, 2).
-			Render(content)
-	}
-
-	// For paused/queued downloads, show simplified view without ETA/Speed/Conns
-	if d.paused || d.Speed == 0 {
-		// Progress bar
-		progressWidth := w - 12
-		if progressWidth < 20 {
-			progressWidth = 20
-		}
-		d.progress.Width = progressWidth
-		progView := d.progress.ViewAs(pct)
-
-		progressLabel := lipgloss.NewStyle().
-			Foreground(ColorNeonCyan).
-			Bold(true).
-			Render("Progress")
-		progressSection := lipgloss.JoinVertical(lipgloss.Left,
-			progressLabel,
-			"",
-			lipgloss.NewStyle().MarginLeft(1).Render(progView),
-		)
-
-		// Elapsed time for paused downloads
-		elapsedSection := lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("Elapsed:"), StatsValueStyle.Render(d.Elapsed.Round(time.Second).String()))
-
-		content := lipgloss.JoinVertical(lipgloss.Left,
-			statusBox,
-			"",
-			fileInfo,
-			divider,
-			"",
-			progressSection,
-			"",
-			divider,
-			"",
-			elapsedSection,
-			"",
-			divider,
-			"",
-			sourceSection,
-			IDSection,
-		)
-
-		return lipgloss.NewStyle().
-			Padding(0, 2).
-			Render(content)
-	}
-
-	// For active downloads, show full view with progress, ETA, speed, connections
-	// Progress bar with margins
-	progressWidth := w - 12
+	// --- 3. Progress Section ---
+	progressWidth := w - 4
 	if progressWidth < 20 {
 		progressWidth = 20
 	}
 	d.progress.Width = progressWidth
 	progView := d.progress.ViewAs(pct)
 
-	progressLabel := lipgloss.NewStyle().
-		Foreground(ColorNeonCyan).
-		Bold(true).
-		Render("Progress")
-	progressSection := lipgloss.JoinVertical(lipgloss.Left,
-		progressLabel,
-		"",
-		lipgloss.NewStyle().MarginLeft(1).Render(progView),
-	)
+	progLabel := lipgloss.NewStyle().Foreground(ColorNeonCyan).Render("Progress: ")
+	progContent := lipgloss.JoinVertical(lipgloss.Left, progLabel, progView)
 
-	// Calculate ETA
-	var etaStr string
-	if d.Speed > 0 && d.Total > 0 {
-		remaining := d.Total - d.Downloaded
-		etaSeconds := float64(remaining) / d.Speed
-		etaDuration := time.Duration(etaSeconds) * time.Second
-		etaStr = etaDuration.Round(time.Second).String()
+	// Progress bar has its own width handling usually, but let's wrap it to be sure
+	progSection := lipgloss.NewStyle().Width(contentWidth).Align(lipgloss.Center).Render(progContent)
+
+	// --- 4. Stats Grid Section ---
+	var speedStr, etaStr, sizeStr, timeStr string
+
+	// Size
+	if d.done {
+		sizeStr = utils.ConvertBytesToHumanReadable(d.Total)
 	} else {
-		etaStr = "∞"
+		sizeStr = fmt.Sprintf("%s / %s", utils.ConvertBytesToHumanReadable(d.Downloaded), utils.ConvertBytesToHumanReadable(d.Total))
 	}
 
-	// Stats section with ETA
-	statsSection := lipgloss.JoinVertical(lipgloss.Left,
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("Speed:"), StatsValueStyle.Render(fmt.Sprintf("%.2f MB/s", d.Speed/Megabyte))),
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("ETA:"), StatsValueStyle.Render(etaStr)),
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("Conns:"), StatsValueStyle.Render(fmt.Sprintf("%d", d.Connections))),
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("Elapsed:"), StatsValueStyle.Render(d.Elapsed.Round(time.Second).String())),
+	// Speed & ETA
+	if d.done {
+		if d.Elapsed.Seconds() > 0 {
+			avgSpeed := float64(d.Total) / d.Elapsed.Seconds()
+			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", avgSpeed/Megabyte)
+		} else {
+			speedStr = "N/A"
+		}
+		etaStr = "Done"
+	} else if d.paused || d.Speed == 0 {
+		speedStr = "Paused"
+		etaStr = "∞"
+	} else {
+		speedStr = fmt.Sprintf("%.2f MB/s", d.Speed/Megabyte)
+		if d.Total > 0 {
+			remaining := d.Total - d.Downloaded
+			etaSeconds := float64(remaining) / d.Speed
+			etaDuration := time.Duration(etaSeconds) * time.Second
+			etaStr = etaDuration.Round(time.Second).String()
+		} else {
+			etaStr = "∞"
+		}
+	}
+
+	timeStr = d.Elapsed.Round(time.Second).String()
+
+	// Stats Layout
+	colWidth := (contentWidth - 4) / 2
+	leftCol := lipgloss.JoinVertical(lipgloss.Left,
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("Size:"), StatsValueStyle.Render(sizeStr)),
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("Speed:"), StatsValueStyle.Render(speedStr)),
+	)
+	rightCol := lipgloss.JoinVertical(lipgloss.Left,
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("Time:"), StatsValueStyle.Render(timeStr)),
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("ETA:"), StatsValueStyle.Render(etaStr)),
 	)
 
-	// Combine all sections with status box at top
-	content := lipgloss.JoinVertical(lipgloss.Left,
-		statusBox,
-		"",
-		fileInfo,
-		divider,
-		"",
-		progressSection,
-		"",
-		divider,
-		"",
-		statsSection,
-		"",
-		divider,
-		"",
-		sourceSection,
-		IDSection,
+	statsContent := lipgloss.JoinHorizontal(lipgloss.Top,
+		lipgloss.NewStyle().Width(colWidth).Render(leftCol),
+		lipgloss.NewStyle().Width(colWidth).Render(rightCol),
 	)
+	statsSection := sectionStyle.Render(statsContent)
 
-	// Wrap in a container with reduced padding
+	// --- 5. Mirrors Section ---
+	var mirrorSection string
+	if d.state != nil && len(d.state.GetMirrors()) > 0 {
+		activeCount := 0
+		errorCount := 0
+		total := len(d.state.GetMirrors())
+		for _, m := range d.state.GetMirrors() {
+			if m.Active {
+				activeCount++
+			}
+			if m.Error {
+				errorCount++
+			}
+		}
+		// More prominent Mirrors display
+		mirrorLabel := StatsLabelStyle.Render("Mirrors")
+		mirrorStats := lipgloss.NewStyle().Foreground(ColorLightGray).Render(fmt.Sprintf("%d Active / %d Total (%d Errors)", activeCount, total, errorCount))
+
+		mirrorSection = sectionStyle.Render(lipgloss.JoinVertical(lipgloss.Left, mirrorLabel, mirrorStats))
+	}
+
+	// --- 6. Error Section ---
+	var errorSection string
+	if d.err != nil {
+		errorSection = sectionStyle.Copy().
+			Render(lipgloss.NewStyle().Foreground(ColorStateError).Render("Error: " + d.err.Error()))
+	}
+
+	// Combine with Dividers
+	// Use explicit calls to insert divider only where needed
+	var parts []string
+
+	parts = append(parts, statusBox)
+	parts = append(parts, fileSection)
+	parts = append(parts, divider)
+	parts = append(parts, progSection)
+	parts = append(parts, divider)
+	parts = append(parts, statsSection)
+
+	if mirrorSection != "" {
+		parts = append(parts, divider)
+		parts = append(parts, mirrorSection)
+	}
+
+	if errorSection != "" {
+		parts = append(parts, divider)
+		parts = append(parts, errorSection)
+	}
+
+	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
+
 	return lipgloss.NewStyle().
-		Padding(0, 2).
+		Padding(1, 2). // Outer padding
 		Render(content)
 }
 
