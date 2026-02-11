@@ -23,12 +23,6 @@ Surge is designed for power users who prefer a keyboard-driven workflow. It feat
 
 ![Surge Demo](assets/demo.gif)
 
-## Backstory
-
-We are two college students who maintain this project. We suffered from terrible college internet and desperately wanted something that downloads files as fast as physically possible.
-
-The existing options were lacking: XDM is no longer maintained, and IDM is closed-source and paid. So, we built Surge—an open-source, high-performance download manager that squeezes every bit of bandwidth out of your connection.
-
 ## Why use Surge?
 
 Most browsers open a single connection for a download. Surge opens multiple (up to 32), splits the file, and downloads chunks in parallel. But we take it a step further:
