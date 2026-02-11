@@ -37,30 +37,30 @@ func TestDefaultSettings(t *testing.T) {
 	})
 
 	// Verify Connection settings
-	t.Run("ConnectionSettings", func(t *testing.T) {
-		if settings.Connections.MaxConnectionsPerHost <= 0 {
-			t.Errorf("MaxConnectionsPerHost should be positive, got: %d", settings.Connections.MaxConnectionsPerHost)
+	t.Run("NetworkSettings", func(t *testing.T) {
+		if settings.Network.MaxConnectionsPerHost <= 0 {
+			t.Errorf("MaxConnectionsPerHost should be positive, got: %d", settings.Network.MaxConnectionsPerHost)
 		}
-		if settings.Connections.MaxConnectionsPerHost > 64 {
-			t.Errorf("MaxConnectionsPerHost shouldn't exceed 64, got: %d", settings.Connections.MaxConnectionsPerHost)
+		if settings.Network.MaxConnectionsPerHost > 64 {
+			t.Errorf("MaxConnectionsPerHost shouldn't exceed 64, got: %d", settings.Network.MaxConnectionsPerHost)
 		}
-		if settings.Connections.MaxGlobalConnections <= 0 {
-			t.Errorf("MaxGlobalConnections should be positive, got: %d", settings.Connections.MaxGlobalConnections)
+		if settings.Network.MaxGlobalConnections <= 0 {
+			t.Errorf("MaxGlobalConnections should be positive, got: %d", settings.Network.MaxGlobalConnections)
 		}
 		// UserAgent can be empty (means use default)
-		if settings.Connections.SequentialDownload {
+		if settings.Network.SequentialDownload {
 			t.Error("SequentialDownload should be false by default")
 		}
 	})
 
 	// Verify Chunk settings
-	t.Run("ChunkSettings", func(t *testing.T) {
-		if settings.Chunks.MinChunkSize <= 0 {
-			t.Errorf("MinChunkSize should be positive, got: %d", settings.Chunks.MinChunkSize)
+	t.Run("NetworkChunkSettings", func(t *testing.T) {
+		if settings.Network.MinChunkSize <= 0 {
+			t.Errorf("MinChunkSize should be positive, got: %d", settings.Network.MinChunkSize)
 		}
 
-		if settings.Chunks.WorkerBufferSize <= 0 {
-			t.Errorf("WorkerBufferSize should be positive, got: %d", settings.Chunks.WorkerBufferSize)
+		if settings.Network.WorkerBufferSize <= 0 {
+			t.Errorf("WorkerBufferSize should be positive, got: %d", settings.Network.WorkerBufferSize)
 		}
 	})
 
@@ -94,7 +94,7 @@ func TestDefaultSettings_Consistency(t *testing.T) {
 	}
 
 	// Values should be equal
-	if s1.Connections.MaxConnectionsPerHost != s2.Connections.MaxConnectionsPerHost {
+	if s1.Network.MaxConnectionsPerHost != s2.Network.MaxConnectionsPerHost {
 		t.Error("Default settings should be consistent")
 	}
 }
@@ -139,15 +139,13 @@ func TestSaveAndLoadSettings(t *testing.T) {
 			ExtensionPrompt:    true,
 			AutoResume:         true,
 		},
-		Connections: ConnectionSettings{
+		Network: NetworkSettings{
 			MaxConnectionsPerHost:  16,
 			MaxGlobalConnections:   50,
 			MaxConcurrentDownloads: 7,
 			UserAgent:              "TestAgent/1.0",
-		},
-		Chunks: ChunkSettings{
-			MinChunkSize:     1 * MB,
-			WorkerBufferSize: 256 * KB,
+			MinChunkSize:           1 * MB,
+			WorkerBufferSize:       256 * KB,
 		},
 		Performance: PerformanceSettings{
 			MaxTaskRetries:        5,
@@ -192,16 +190,16 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	if loaded.General.ExtensionPrompt != original.General.ExtensionPrompt {
 		t.Error("ExtensionPrompt mismatch")
 	}
-	if loaded.Connections.MaxConcurrentDownloads != original.Connections.MaxConcurrentDownloads {
-		t.Errorf("MaxConcurrentDownloads mismatch: got %d, want %d", loaded.Connections.MaxConcurrentDownloads, original.Connections.MaxConcurrentDownloads)
+	if loaded.Network.MaxConcurrentDownloads != original.Network.MaxConcurrentDownloads {
+		t.Errorf("MaxConcurrentDownloads mismatch: got %d, want %d", loaded.Network.MaxConcurrentDownloads, original.Network.MaxConcurrentDownloads)
 	}
-	if loaded.Connections.MaxConnectionsPerHost != original.Connections.MaxConnectionsPerHost {
+	if loaded.Network.MaxConnectionsPerHost != original.Network.MaxConnectionsPerHost {
 		t.Error("MaxConnectionsPerHost mismatch")
 	}
-	if loaded.Connections.UserAgent != original.Connections.UserAgent {
+	if loaded.Network.UserAgent != original.Network.UserAgent {
 		t.Error("UserAgent mismatch")
 	}
-	if loaded.Chunks.MinChunkSize != original.Chunks.MinChunkSize {
+	if loaded.Network.MinChunkSize != original.Network.MinChunkSize {
 		t.Error("MinChunkSize mismatch")
 	}
 	if loaded.Performance.SlowWorkerGracePeriod != original.Performance.SlowWorkerGracePeriod {
@@ -219,7 +217,7 @@ func TestLoadSettings_MissingFile(t *testing.T) {
 
 	if settings != nil {
 		// If we got settings, they should have sensible defaults
-		if settings.Connections.MaxConnectionsPerHost <= 0 {
+		if settings.Network.MaxConnectionsPerHost <= 0 {
 			t.Error("Should return default settings with valid values")
 		}
 	}
@@ -267,7 +265,7 @@ func TestLoadSettings_PartialJSON(t *testing.T) {
 	}
 
 	// Default field should remain (from the defaults we started with)
-	if settings.Connections.MaxConnectionsPerHost <= 0 {
+	if settings.Network.MaxConnectionsPerHost <= 0 {
 		t.Error("Default values should be preserved for missing fields")
 	}
 }
@@ -281,19 +279,19 @@ func TestToRuntimeConfig(t *testing.T) {
 	}
 
 	// Verify all fields are correctly mapped
-	if runtime.MaxConnectionsPerHost != settings.Connections.MaxConnectionsPerHost {
+	if runtime.MaxConnectionsPerHost != settings.Network.MaxConnectionsPerHost {
 		t.Error("MaxConnectionsPerHost not correctly mapped")
 	}
-	if runtime.MaxGlobalConnections != settings.Connections.MaxGlobalConnections {
+	if runtime.MaxGlobalConnections != settings.Network.MaxGlobalConnections {
 		t.Error("MaxGlobalConnections not correctly mapped")
 	}
-	if runtime.UserAgent != settings.Connections.UserAgent {
+	if runtime.UserAgent != settings.Network.UserAgent {
 		t.Error("UserAgent not correctly mapped")
 	}
-	if runtime.MinChunkSize != settings.Chunks.MinChunkSize {
+	if runtime.MinChunkSize != settings.Network.MinChunkSize {
 		t.Error("MinChunkSize not correctly mapped")
 	}
-	if runtime.WorkerBufferSize != settings.Chunks.WorkerBufferSize {
+	if runtime.WorkerBufferSize != settings.Network.WorkerBufferSize {
 		t.Error("WorkerBufferSize not correctly mapped")
 	}
 	if runtime.MaxTaskRetries != settings.Performance.MaxTaskRetries {
@@ -403,7 +401,7 @@ func TestSettingsJSON_Serialization(t *testing.T) {
 	}
 
 	// Verify round-trip
-	if loaded.Connections.MaxConnectionsPerHost != original.Connections.MaxConnectionsPerHost {
+	if loaded.Network.MaxConnectionsPerHost != original.Network.MaxConnectionsPerHost {
 		t.Error("Round-trip failed for MaxConnectionsPerHost")
 	}
 	if loaded.Performance.StallTimeout != original.Performance.StallTimeout {
@@ -424,9 +422,9 @@ func TestConstants(t *testing.T) {
 func TestSaveSettings_RealFunction(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	original := DefaultSettings()
-	original.Connections.MaxConnectionsPerHost = 48
+	original.Network.MaxConnectionsPerHost = 48
 	original.General.AutoResume = true
-	original.Connections.UserAgent = "TestAgent/3.0"
+	original.Network.UserAgent = "TestAgent/3.0"
 
 	err := SaveSettings(original)
 	if err != nil {
@@ -446,14 +444,14 @@ func TestSaveSettings_RealFunction(t *testing.T) {
 	}
 
 	// Verify values match
-	if loaded.Connections.MaxConnectionsPerHost != 48 {
-		t.Errorf("MaxConnectionsPerHost mismatch: got %d, want 48", loaded.Connections.MaxConnectionsPerHost)
+	if loaded.Network.MaxConnectionsPerHost != 48 {
+		t.Errorf("MaxConnectionsPerHost mismatch: got %d, want 48", loaded.Network.MaxConnectionsPerHost)
 	}
 	if !loaded.General.AutoResume {
 		t.Error("AutoResume should be true")
 	}
-	if loaded.Connections.UserAgent != "TestAgent/3.0" {
-		t.Errorf("UserAgent mismatch: got %q, want %q", loaded.Connections.UserAgent, "TestAgent/3.0")
+	if loaded.Network.UserAgent != "TestAgent/3.0" {
+		t.Errorf("UserAgent mismatch: got %q, want %q", loaded.Network.UserAgent, "TestAgent/3.0")
 	}
 
 	// Cleanup: restore defaults
@@ -495,15 +493,13 @@ func TestSaveAndLoadSettings_RoundTrip(t *testing.T) {
 			ExtensionPrompt:    true,
 			AutoResume:         true,
 		},
-		Connections: ConnectionSettings{
+		Network: NetworkSettings{
 			MaxConnectionsPerHost: 64,
 			MaxGlobalConnections:  200,
 			UserAgent:             "RoundTripTest/1.0",
 			SequentialDownload:    true,
-		},
-		Chunks: ChunkSettings{
-			MinChunkSize:     1 * MB,
-			WorkerBufferSize: 1 * MB,
+			MinChunkSize:          1 * MB,
+			WorkerBufferSize:      1 * MB,
 		},
 		Performance: PerformanceSettings{
 			MaxTaskRetries:        10,
@@ -533,10 +529,10 @@ func TestSaveAndLoadSettings_RoundTrip(t *testing.T) {
 	if loaded.General.ExtensionPrompt != original.General.ExtensionPrompt {
 		t.Error("ExtensionPrompt mismatch")
 	}
-	if loaded.Connections.MaxGlobalConnections != original.Connections.MaxGlobalConnections {
+	if loaded.Network.MaxGlobalConnections != original.Network.MaxGlobalConnections {
 		t.Error("MaxGlobalConnections mismatch")
 	}
-	if loaded.Connections.SequentialDownload != original.Connections.SequentialDownload {
+	if loaded.Network.SequentialDownload != original.Network.SequentialDownload {
 		t.Error("SequentialDownload mismatch")
 	}
 	if loaded.Performance.SlowWorkerGracePeriod != original.Performance.SlowWorkerGracePeriod {
@@ -579,5 +575,119 @@ func TestDefaultSettings_Fallback(t *testing.T) {
 		if info, err := os.Stat(dir); err != nil || !info.IsDir() {
 			t.Errorf("DefaultDownloadDir fallback returned invalid path: %s", dir)
 		}
+	}
+}
+
+// === Migration Tests ===
+
+func TestLegacySettingsMigration_FullLegacy(t *testing.T) {
+	// Simulates an existing user's settings.json from before the refactor
+	legacyJSON := `{
+		"general": {
+			"default_download_dir": "/home/user/Downloads",
+			"warn_on_duplicate": true
+		},
+		"connections": {
+			"max_connections_per_host": 48,
+			"max_global_connections": 200,
+			"max_concurrent_downloads": 5,
+			"user_agent": "LegacyAgent/1.0",
+			"sequential_download": true
+		},
+		"chunks": {
+			"min_chunk_size": 4194304,
+			"worker_buffer_size": 1048576
+		},
+		"performance": {
+			"max_task_retries": 5
+		}
+	}`
+
+	settings := DefaultSettings()
+	if err := json.Unmarshal([]byte(legacyJSON), settings); err != nil {
+		t.Fatalf("Failed to unmarshal legacy JSON: %v", err)
+	}
+
+	// Connection fields should be migrated
+	if settings.Network.MaxConnectionsPerHost != 48 {
+		t.Errorf("MaxConnectionsPerHost not migrated: got %d, want 48", settings.Network.MaxConnectionsPerHost)
+	}
+	if settings.Network.MaxGlobalConnections != 200 {
+		t.Errorf("MaxGlobalConnections not migrated: got %d, want 200", settings.Network.MaxGlobalConnections)
+	}
+	if settings.Network.MaxConcurrentDownloads != 5 {
+		t.Errorf("MaxConcurrentDownloads not migrated: got %d, want 5", settings.Network.MaxConcurrentDownloads)
+	}
+	if settings.Network.UserAgent != "LegacyAgent/1.0" {
+		t.Errorf("UserAgent not migrated: got %q, want %q", settings.Network.UserAgent, "LegacyAgent/1.0")
+	}
+	if !settings.Network.SequentialDownload {
+		t.Error("SequentialDownload not migrated: got false, want true")
+	}
+
+	// Chunk fields should also be migrated
+	if settings.Network.MinChunkSize != 4194304 {
+		t.Errorf("MinChunkSize not migrated: got %d, want 4194304", settings.Network.MinChunkSize)
+	}
+	if settings.Network.WorkerBufferSize != 1048576 {
+		t.Errorf("WorkerBufferSize not migrated: got %d, want 1048576", settings.Network.WorkerBufferSize)
+	}
+
+	// Other categories should work normally
+	if settings.General.DefaultDownloadDir != "/home/user/Downloads" {
+		t.Errorf("General settings not loaded: got %q", settings.General.DefaultDownloadDir)
+	}
+	if settings.Performance.MaxTaskRetries != 5 {
+		t.Errorf("Performance settings not loaded: got %d, want 5", settings.Performance.MaxTaskRetries)
+	}
+}
+
+func TestLegacySettingsMigration_ConnectionsOnly(t *testing.T) {
+	// Legacy file with connections but no chunks key
+	legacyJSON := `{
+		"connections": {
+			"max_connections_per_host": 16,
+			"user_agent": "OldAgent/2.0"
+		}
+	}`
+
+	settings := DefaultSettings()
+	if err := json.Unmarshal([]byte(legacyJSON), settings); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if settings.Network.MaxConnectionsPerHost != 16 {
+		t.Errorf("MaxConnectionsPerHost not migrated: got %d, want 16", settings.Network.MaxConnectionsPerHost)
+	}
+	if settings.Network.UserAgent != "OldAgent/2.0" {
+		t.Errorf("UserAgent not migrated: got %q", settings.Network.UserAgent)
+	}
+
+	// Chunk fields should retain defaults (since no "chunks" key was present)
+	defaults := DefaultSettings()
+	if settings.Network.MinChunkSize != defaults.Network.MinChunkSize {
+		t.Errorf("MinChunkSize should be default: got %d, want %d", settings.Network.MinChunkSize, defaults.Network.MinChunkSize)
+	}
+}
+
+func TestLegacySettingsMigration_NewFormatUnchanged(t *testing.T) {
+	// New format with "network" key — migration should NOT trigger
+	newJSON := `{
+		"network": {
+			"max_connections_per_host": 64,
+			"min_chunk_size": 8388608
+		}
+	}`
+
+	settings := DefaultSettings()
+	if err := json.Unmarshal([]byte(newJSON), settings); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if settings.Network.MaxConnectionsPerHost != 64 {
+		t.Errorf("New format broken: got %d, want 64", settings.Network.MaxConnectionsPerHost)
+	}
+	if settings.Network.MinChunkSize != 8388608 {
+		t.Errorf("New format broken: got %d, want 8388608", settings.Network.MinChunkSize)
 	}
 }
