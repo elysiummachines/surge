@@ -33,7 +33,7 @@ const (
 	ThemeDark     = 2
 )
 
-// ConnectionSettings contains network connection parameters.
+// NetworkSettings contains network connection parameters.
 type NetworkSettings struct {
 	MaxConnectionsPerHost  int    `json:"max_connections_per_host"`
 	MaxGlobalConnections   int    `json:"max_global_connections"`
@@ -43,6 +43,36 @@ type NetworkSettings struct {
 	SequentialDownload     bool   `json:"sequential_download"`
 	MinChunkSize           int64  `json:"min_chunk_size"`
 	WorkerBufferSize       int    `json:"worker_buffer_size"`
+}
+
+// UnmarshalJSON implements custom JSON unmarshalling for Settings.
+// This provides backward compatibility with the legacy "connections" + "chunks"
+// migrating them into the new unified "network" field.
+func (s *Settings) UnmarshalJSON(data []byte) error {
+	// Use an alias to avoid infinite recursion (alias has no methods)
+	type Alias Settings
+	if err := json.Unmarshal(data, (*Alias)(s)); err != nil {
+		return err
+	}
+
+	// Check if the JSON had legacy keys instead of "network"
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil // Already parsed above, ignore raw parse errors
+	}
+
+	if _, hasNetwork := raw["network"]; !hasNetwork {
+		// Migrate legacy "connections" key (overlays onto Network)
+		if conn, ok := raw["connections"]; ok {
+			_ = json.Unmarshal(conn, &s.Network)
+		}
+		// Migrate legacy "chunks" key (overlays chunk fields onto Network)
+		if chunks, ok := raw["chunks"]; ok {
+			_ = json.Unmarshal(chunks, &s.Network)
+		}
+	}
+
+	return nil
 }
 
 // PerformanceSettings contains performance tuning parameters.
